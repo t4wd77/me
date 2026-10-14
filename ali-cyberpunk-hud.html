@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#050811">
+<title>علي سالم بدوي // Cyberpunk HUD</title>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=Share+Tech+Mono&family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#050811; --card:rgba(10,16,32,.78); --line:rgba(0,243,255,.3);
+  --cyan:#00f3ff; --magenta:#ff0055; --green:#00ff66; --yellow:#ffb700;
+  --text:#e0f7fc; --dim:#8fb0bd; --glow:0 0 15px rgba(0,243,255,.4);
+  --mono:'Share Tech Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);color:var(--text);font-family:'Tajawal','Chakra Petch',sans-serif;
+  min-height:100vh;min-height:100dvh;overflow-x:hidden;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) calc(64px + env(safe-area-inset-bottom)) env(safe-area-inset-left);
+  -webkit-user-select:none;user-select:none;
+}
+input,textarea{-webkit-user-select:text;user-select:text}
+:focus-visible{outline:2px solid var(--yellow);outline-offset:3px}
+#cyber-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
+.scanlines{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.55;
+  background:linear-gradient(rgba(18,16,16,0) 50%,rgba(0,0,0,.25) 50%);background-size:100% 4px}
+.scanlines::after{content:"";position:absolute;left:0;right:0;height:120px;top:-120px;
+  background:linear-gradient(transparent,rgba(0,243,255,.07),transparent);animation:sweep 7s linear infinite}
+@keyframes sweep{to{transform:translateY(calc(100vh + 240px))}}
+
+/* Boot sequence: the one orchestrated moment */
+#boot{position:fixed;inset:0;z-index:100;background:var(--bg);display:flex;align-items:center;justify-content:center;
+  padding:24px;transition:opacity .5s,visibility .5s;direction:ltr}
+#boot.done{opacity:0;visibility:hidden}
+#boot pre{font-family:var(--mono);color:var(--green);font-size:clamp(.75rem,3.2vw,.95rem);line-height:1.8;white-space:pre-wrap;max-width:460px;width:100%}
+#boot pre::after{content:"█";animation:blink .7s steps(1) infinite;color:var(--cyan)}
+@keyframes blink{50%{opacity:0}}
+
+.hud{position:relative;z-index:2;max-width:920px;margin:0 auto;padding:14px}
+
+/* Header */
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;
+  background:var(--card);border:1px solid var(--cyan);border-radius:8px;padding:12px 16px;margin-bottom:16px;
+  box-shadow:var(--glow);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  clip-path:polygon(0 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%)}
+.sys-id{display:flex;align-items:center;gap:12px;min-width:0}
+.avatar{flex:none;width:52px;height:52px;border:2px solid var(--magenta);border-radius:4px;display:grid;place-items:center;
+  background:rgba(255,0,85,.1);font-family:var(--mono);color:var(--magenta);font-size:1.15rem;
+  box-shadow:0 0 12px rgba(255,0,85,.45);animation:pulse 3s ease-in-out infinite}
+@keyframes pulse{50%{box-shadow:0 0 22px rgba(255,0,85,.8)}}
+.title h1{font-size:clamp(1.15rem,5vw,1.6rem);font-weight:900;color:#fff;line-height:1.2}
+.title p{font-family:var(--mono);font-size:.72rem;color:var(--cyan);direction:ltr;text-align:right;margin-top:2px}
+.title p::after{content:"_";animation:blink 1s steps(1) infinite}
+
+/* Glitch: pseudo-layers copy the text and slice it */
+.glitch{position:relative;display:inline-block}
+.glitch::before,.glitch::after{content:attr(data-text);position:absolute;inset:0;opacity:0;pointer-events:none}
+.glitch::before{color:var(--cyan);clip-path:inset(0 0 55% 0)}
+.glitch::after{color:var(--magenta);clip-path:inset(55% 0 0 0)}
+.glitch.on{animation:shake .4s steps(2) 1}
+.glitch.on::before{opacity:.9;animation:slice1 .4s steps(3) 1}
+.glitch.on::after{opacity:.9;animation:slice2 .4s steps(3) 1}
+@keyframes shake{25%{transform:translate(2px,-1px)}75%{transform:translate(-2px,1px)}}
+@keyframes slice1{0%{transform:translate(-4px,0)}50%{transform:translate(3px,-1px)}100%{transform:translate(0)}}
+@keyframes slice2{0%{transform:translate(4px,0)}50%{transform:translate(-3px,1px)}100%{transform:translate(0)}}
+
+.icon-btn{background:rgba(0,243,255,.1);border:1px solid var(--cyan);color:var(--cyan);padding:9px 14px;border-radius:4px;
+  cursor:pointer;font-family:var(--mono);font-size:.8rem;min-height:40px;transition:transform .15s,background .2s}
+.icon-btn:active{transform:scale(.94);background:var(--cyan);color:#000}
+
+/* Nav */
+.nav{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
+.tab{background:var(--card);border:1px solid var(--line);color:var(--dim);padding:10px 4px;border-radius:4px;cursor:pointer;
+  font-family:'Tajawal',sans-serif;font-size:clamp(.78rem,3.2vw,.92rem);min-height:52px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  transition:transform .15s,color .2s,border-color .2s,background .2s;position:relative;overflow:hidden}
+.tab small{font-family:var(--mono);font-size:.62rem;opacity:.8;direction:ltr}
+.tab:active{transform:scale(.95)}
+.tab[aria-selected=true]{color:var(--cyan);border-color:var(--cyan);background:rgba(0,243,255,.15);box-shadow:var(--glow);font-weight:700}
+.tab[aria-selected=true]::after{content:"";position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+
+/* Panels */
+.panel{display:none;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:clamp(14px,4vw,24px);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);margin-bottom:20px;
+  clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px)}
+.panel.active{display:block;animation:in .35s ease-out}
+@keyframes in{from{opacity:0;transform:translateY(8px)}}
+.p-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;border-bottom:1px dashed var(--line);padding-bottom:10px;margin-bottom:16px}
+.p-title{color:var(--magenta);font-family:var(--mono);font-size:1rem;direction:ltr}
+.p-title::before{content:"> ";color:var(--cyan)}
+.badge{font-family:var(--mono);font-size:.72rem;color:var(--green);border:1px solid var(--green);padding:2px 8px;border-radius:2px;direction:ltr}
+.bio{line-height:1.9;font-size:1rem;margin-bottom:8px}
+.bio b{color:var(--cyan)}
+.sub{font-family:var(--mono);font-size:.76rem;color:var(--dim);direction:ltr;text-align:right;line-height:1.6;margin-bottom:18px}
+.sub::before{content:"// ";color:var(--magenta)}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:12px}
+.info{background:rgba(0,0,0,.4);border-right:3px solid var(--cyan);padding:10px 12px;border-radius:2px}
+.info .l{font-size:.7rem;color:var(--dim);font-family:var(--mono);direction:ltr;text-align:right}
+.info .v{font-size:.95rem;color:#fff;font-weight:700;margin-top:4px}
+
+/* Skills */
+.skill{margin-bottom:22px}
+.skill-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-family:var(--mono);font-size:.85rem;direction:ltr;margin-bottom:2px}
+.skill-top .pct{color:var(--cyan)}
+.skill-ar{font-size:.88rem;color:var(--dim);margin-bottom:7px}
+.bar{height:10px;background:rgba(0,0,0,.55);border:1px solid var(--line);border-radius:2px;overflow:hidden;direction:ltr}
+.fill{height:100%;width:0;background:linear-gradient(90deg,var(--cyan),var(--magenta));box-shadow:0 0 10px var(--cyan);
+  transition:width 1.1s cubic-bezier(.2,.8,.2,1);position:relative}
+.fill::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.5),transparent);
+  transform:translateX(-100%);animation:shine 2.8s ease-in-out 1.2s infinite}
+@keyframes shine{60%,100%{transform:translateX(100%)}}
+
+/* Quests */
+.quest{background:rgba(0,0,0,.5);border:1px solid var(--line);border-radius:6px;padding:16px;position:relative;transition:border-color .2s,box-shadow .2s,transform .15s}
+.quest:hover,.quest:focus-within{border-color:var(--cyan);box-shadow:var(--glow)}
+.quest:active{transform:scale(.985)}
+.tag{display:inline-block;font-family:var(--mono);font-size:.65rem;padding:2px 7px;border:1px solid var(--green);color:var(--green);background:rgba(0,255,102,.1);border-radius:2px;margin-bottom:8px;direction:ltr}
+.tag.active{border-color:var(--yellow);color:var(--yellow);background:rgba(255,183,0,.1);animation:blink 1.6s ease-in-out infinite}
+.q-title{font-family:'Chakra Petch',sans-serif;font-size:1.05rem;color:#fff;direction:ltr;text-align:right}
+.q-sub{font-family:var(--mono);font-size:.7rem;color:var(--magenta);direction:ltr;text-align:right;margin:2px 0 10px}
+.q-desc{font-size:.88rem;color:var(--dim);line-height:1.7;margin-bottom:12px}
+.tech{display:flex;gap:6px;flex-wrap:wrap;direction:ltr}
+.tech span{font-size:.7rem;font-family:var(--mono);background:rgba(0,243,255,.1);color:var(--cyan);padding:2px 8px;border-radius:2px}
+
+/* Contact */
+.term{background:#02040a;border:1px solid var(--cyan);padding:16px;border-radius:6px;font-family:var(--mono)}
+.t-line{color:var(--green);margin-bottom:12px;font-size:.82rem;direction:ltr;text-align:left}
+.field{width:100%;background:rgba(0,243,255,.05);border:1px solid var(--line);color:var(--cyan);padding:12px;border-radius:4px;margin-bottom:12px;
+  font-family:'Tajawal',sans-serif;font-size:1rem;outline:none;transition:border-color .2s,box-shadow .2s}
+.field:focus{border-color:var(--magenta);box-shadow:0 0 10px rgba(255,0,85,.4)}
+.field::placeholder{color:#5f8290}
+.send{width:100%;background:var(--cyan);color:#000;border:0;padding:14px;font-family:var(--mono);font-weight:700;font-size:.95rem;cursor:pointer;border-radius:4px;
+  box-shadow:var(--glow);min-height:48px;transition:transform .15s,background .2s,color .2s}
+.send:active{transform:scale(.97);background:var(--magenta);color:#fff}
+#status{margin-top:12px;font-size:.82rem;min-height:1.2em;color:var(--yellow)}
+#status.ok{color:var(--green)}
+
+/* Bottom bar */
+.bottom{position:fixed;bottom:0;left:0;right:0;z-index:10;background:rgba(5,8,17,.95);border-top:1px solid var(--cyan);
+  padding:8px 15px calc(8px + env(safe-area-inset-bottom));display:flex;justify-content:space-between;align-items:center;gap:10px;
+  font-family:var(--mono);font-size:.7rem;color:var(--dim);direction:ltr;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.dot{display:inline-block;width:8px;height:8px;background:var(--green);border-radius:50%;box-shadow:0 0 8px var(--green);margin-right:6px;animation:pulse2 2s infinite}
+@keyframes pulse2{50%{opacity:.3}}
+
+@media (min-width:700px){.hud{padding:24px}.tab{flex-direction:row;gap:8px}}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  .scanlines::after{display:none}
+}
+</style>
+</head>
+<body>
+
+<div id="boot" aria-hidden="true"><pre id="boot-text"></pre></div>
+<canvas id="cyber-canvas" aria-hidden="true"></canvas>
+<div class="scanlines" aria-hidden="true"></div>
+
+<main class="hud">
+  <header>
+    <div class="sys-id">
+      <div class="avatar">ASB</div>
+      <div class="title">
+        <h1><span class="glitch" id="name" data-text="علي سالم بدوي">علي سالم بدوي</span></h1>
+        <p id="role">AUTOMATION &amp; AI ENGINEER</p>
+      </div>
+    </div>
+    <button class="icon-btn" id="audio-toggle" aria-pressed="true">AUDIO: ON</button>
+  </header>
+
+  <nav class="nav" role="tablist" aria-label="أقسام الواجهة">
+    <button class="tab" role="tab" id="t-profile" aria-controls="panel-profile" aria-selected="true" data-tab="profile">الهوية <small>[01 ID]</small></button>
+    <button class="tab" role="tab" id="t-skills" aria-controls="panel-skills" aria-selected="false" data-tab="skills" tabindex="-1">القدرات <small>[02 SKILLS]</small></button>
+    <button class="tab" role="tab" id="t-quests" aria-controls="panel-quests" aria-selected="false" data-tab="quests" tabindex="-1">السجلات <small>[03 LOGS]</small></button>
+    <button class="tab" role="tab" id="t-contact" aria-controls="panel-contact" aria-selected="false" data-tab="contact" tabindex="-1">الاتصال <small>[04 COMMS]</small></button>
+  </nav>
+
+  <!-- PROFILE -->
+  <section class="panel active" id="panel-profile" role="tabpanel" aria-labelledby="t-profile">
+    <div class="p-head"><div class="p-title">SYSTEM INITIATE // ملف الهوية</div><span class="badge">STATUS: ACTIVE</span></div>
+    <p class="bio">أهلاً بيك! أني <b>علي سالم بدوي</b>، أدرس <b>هندسة الأتمتة والذكاء الاصطناعي</b> بـ <b>جامعة النهرين - كلية هندسة المعلومات</b>.<br>مهتم بتطوير مهاراتي بالـ <span dir="ltr">C++</span> والـ <span dir="ltr">Python</span> والأتمتة الهندسية. هذا الموقع هو مساحتي الخاصة لأرشيف أكوادي ومشاريعي.</p>
+    <p class="sub">OPERATOR LOG: turning raw logic into algorithms, and algorithms into self-running systems.</p>
+    <div class="grid">
+      <div class="info"><div class="l">UNIVERSITY / المؤسسة</div><div class="v">جامعة النهرين</div></div>
+      <div class="info"><div class="l">COLLEGE / الكلية</div><div class="v">هندسة المعلومات</div></div>
+      <div class="info"><div class="l">DEPT / التخصص</div><div class="v">الأتمتة والذكاء الاصطناعي</div></div>
+      <div class="info"><div class="l">RANK / المستوى</div><div class="v">System Apprentice <span style="color:var(--dim);font-weight:400">· مهندس قيد التشكّل</span></div></div>
+    </div>
+  </section>
+
+  <!-- SKILLS -->
+  <section class="panel" id="panel-skills" role="tabpanel" aria-labelledby="t-skills" hidden>
+    <div class="p-head"><div class="p-title">SYSTEM CAPABILITIES // القدرات</div><span class="badge">3 MODULES LOADED</span></div>
+    <p class="sub">SKILL MATRIX: levels update as the build progresses.</p>
+
+    <div class="skill">
+      <div class="skill-top"><span>C++ LOGIC &amp; ALGORITHMS</span><span class="pct" data-to="65">0%</span></div>
+      <div class="skill-ar">منطق صلب وأداء بلا هوادة: خوارزميات وهياكل بيانات.</div>
+      <div class="bar" role="progressbar" aria-valuenow="65" aria-valuemin="0" aria-valuemax="100"><div class="fill" data-w="65"></div></div>
+    </div>
+    <div class="skill">
+      <div class="skill-top"><span>PYTHON CORE &amp; AUTOMATION</span><span class="pct" data-to="60">0%</span></div>
+      <div class="skill-ar">أتمتة ذكية تختصر ساعات العمل اليدوي إلى ثوانٍ.</div>
+      <div class="bar" role="progressbar" aria-valuenow="60" aria-valuemin="0" aria-valuemax="100"><div class="fill" data-w="60"></div></div>
+    </div>
+    <div class="skill">
+      <div class="skill-top"><span>ENGINEERING LOGIC FUNDAMENTALS</span><span class="pct" data-to="30">0%</span></div>
+      <div class="skill-ar">الأساسات المنطقية التي تُبنى عليها الأنظمة الهندسية.</div>
+      <div class="bar" role="progressbar" aria-valuenow="30" aria-valuemin="0" aria-valuemax="100"><div class="fill" data-w="30"></div></div>
+    </div>
+  </section>
+
+  <!-- QUESTS -->
+  <section class="panel" id="panel-quests" role="tabpanel" aria-labelledby="t-quests" hidden>
+    <div class="p-head"><div class="p-title">SYSTEM LOGS // السجلات</div><span class="badge">2 ENTRIES</span></div>
+    <p class="sub">MISSION ARCHIVE: completed builds and live experiments.</p>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr))">
+      <article class="quest" tabindex="0">
+        <span class="tag">COMPLETED</span>
+        <h3 class="q-title">C++ Matrix Logic Engine</h3>
+        <div class="q-sub">MODULE_01 / MATRIX OPS + LOGIC</div>
+        <p class="q-desc">محرك برمجي لمعالجة المصفوفات والعمليات المنطقية، مبني بلغة C++ لحل المسائل الهندسية بدقة وسرعة.</p>
+        <div class="tech"><span>C++</span><span>Algorithms</span></div>
+      </article>
+      <article class="quest" tabindex="0">
+        <span class="tag active">IN PROGRESS</span>
+        <h3 class="q-title">Python Automation Scripts</h3>
+        <div class="q-sub">MODULE_02 / AUTO-PILOT TOOLKIT</div>
+        <p class="q-desc">سكربتات أتمتة تتولى المهام المتكررة، وتتعامل مع الملفات وقواعد البيانات بدلاً عني.</p>
+        <div class="tech"><span>Python</span><span>Automation</span></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- CONTACT -->
+  <section class="panel" id="panel-contact" role="tabpanel" aria-labelledby="t-contact" hidden>
+    <div class="p-head"><div class="p-title">TRANSMISSION CHANNEL // إرسال إشارة</div></div>
+    <form class="term" id="form" novalidate>
+      <div class="t-line">&gt; INITIATING SECURE TRANSMISSION LINK...</div>
+      <label for="f-name" hidden>الاسم</label>
+      <input id="f-name" class="field" type="text" placeholder="اسمك / Identity" autocomplete="name" required>
+      <label for="f-mail" hidden>البريد الإلكتروني</label>
+      <input id="f-mail" class="field" type="email" placeholder="بريدك الإلكتروني / Email" autocomplete="email" inputmode="email" required>
+      <label for="f-msg" hidden>الرسالة</label>
+      <textarea id="f-msg" class="field" rows="4" placeholder="نص الرسالة / Data Payload" required></textarea>
+      <button class="send" type="submit">[ SEND TRANSMISSION ]</button>
+      <div id="status" role="status" aria-live="polite"></div>
+    </form>
+  </section>
+</main>
+
+<div class="bottom">
+  <span><i class="dot"></i>SYS_ONLINE // AL-NAHRAIN NODE</span>
+  <span id="live-time">00:00:00 UTC</span>
+</div>
+
+<script>
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+// Put a form endpoint here (e.g. Formspree) to make the contact form really send.
+const FORM_ENDPOINT = '';
+
+/* ---------- Audio ---------- */
+let audioCtx = null, audioOn = true;
+function beep(freq = 800, type = 'sine', dur = .05){
+  if(!audioOn) return;
+  try{
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain(), t = audioCtx.currentTime;
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(.05, t); g.gain.exponentialRampToValueAtTime(.001, t + dur);
+    o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(t + dur);
+  }catch(e){}
+}
+const tap = (f, t) => { beep(f, t); navigator.vibrate && navigator.vibrate(8); };
+const audioBtn = document.getElementById('audio-toggle');
+audioBtn.addEventListener('click', () => {
+  audioOn = !audioOn;
+  audioBtn.textContent = audioOn ? 'AUDIO: ON' : 'AUDIO: OFF';
+  audioBtn.style.color = audioOn ? '' : 'var(--magenta)';
+  audioBtn.setAttribute('aria-pressed', audioOn);
+  if(audioOn) beep(1200, 'square', .1);
+});
+
+/* ---------- Boot sequence ---------- */
+(function boot(){
+  const el = document.getElementById('boot'), out = document.getElementById('boot-text');
+  const lines = ['> BOOTING AL-NAHRAIN NODE...', '> LOADING MODULES: C++ / PYTHON / SIM', '> OPERATOR: ALI SALEM BADAWI', '> ACCESS GRANTED'];
+  const end = () => { el.classList.add('done'); glitchName(); };
+  if(REDUCED){ el.classList.add('done'); return; }
+  let i = 0;
+  const next = () => { if(i < lines.length){ out.textContent += lines[i++] + '\n'; setTimeout(next, 280); } else setTimeout(end, 350); };
+  el.addEventListener('click', end);
+  next();
+})();
+
+/* ---------- Glitch ---------- */
+const nameEl = document.getElementById('name');
+function glitchName(){
+  if(REDUCED) return;
+  nameEl.classList.remove('on'); void nameEl.offsetWidth; nameEl.classList.add('on');
+}
+nameEl.addEventListener('pointerenter', glitchName);
+nameEl.addEventListener('click', glitchName);
+setInterval(glitchName, 7000);
+
+/* ---------- Typewriter role ---------- */
+(function(){
+  const el = document.getElementById('role'), full = el.textContent;
+  if(REDUCED) return;
+  el.textContent = ''; let i = 0;
+  const t = setInterval(() => { el.textContent = full.slice(0, ++i); if(i >= full.length) clearInterval(t); }, 55);
+})();
+
+/* ---------- Tabs ---------- */
+const tabs = [...document.querySelectorAll('.tab')];
+function switchTab(id, focus){
+  tabs.forEach(t => {
+    const on = t.dataset.tab === id;
+    t.setAttribute('aria-selected', on); t.tabIndex = on ? 0 : -1;
+    if(on && focus) t.focus();
+  });
+  document.querySelectorAll('.panel').forEach(p => {
+    const on = p.id === 'panel-' + id;
+    p.classList.toggle('active', on); p.hidden = !on;
+  });
+  if(id === 'skills') animateSkills();
+  else document.querySelectorAll('.fill').forEach(f => f.style.width = 0);
+  history.replaceState(null, '', '#' + id);
+}
+tabs.forEach((t, i) => {
+  t.addEventListener('click', () => { tap(900); switchTab(t.dataset.tab); });
+  t.addEventListener('keydown', e => {
+    // RTL: ArrowLeft moves to the next tab visually left = next in DOM order
+    const d = {ArrowLeft: 1, ArrowRight: -1}[e.key];
+    if(d){ e.preventDefault(); const n = tabs[(i + d + tabs.length) % tabs.length]; tap(900); switchTab(n.dataset.tab, true); }
+  });
+});
+
+function animateSkills(){
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    document.querySelectorAll('.fill').forEach(f => f.style.width = f.dataset.w + '%');
+  }));
+  document.querySelectorAll('.pct').forEach(p => {
+    const to = +p.dataset.to; let n = 0;
+    if(REDUCED){ p.textContent = to + '%'; return; }
+    const t = setInterval(() => { n += 2; if(n >= to){ n = to; clearInterval(t); } p.textContent = n + '%'; }, 24);
+  });
+}
+
+/* ---------- Contact form ---------- */
+document.getElementById('form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const st = document.getElementById('status'), n = f => document.getElementById(f).value.trim();
+  st.className = '';
+  if(!n('f-name') || !/^\S+@\S+\.\S+$/.test(n('f-mail')) || !n('f-msg')){
+    st.textContent = '> ERROR: أكمل الاسم والبريد الصحيح والرسالة.'; beep(300, 'sawtooth', .15); return;
+  }
+  if(!FORM_ENDPOINT){ st.textContent = '> OFFLINE: قناة الإرسال غير مفعّلة بعد.'; beep(300, 'sawtooth', .15); return; }
+  try{
+    const r = await fetch(FORM_ENDPOINT, {method: 'POST', headers: {'Content-Type': 'application/json', Accept: 'application/json'},
+      body: JSON.stringify({name: n('f-name'), email: n('f-mail'), message: n('f-msg')})});
+    if(!r.ok) throw 0;
+    st.className = 'ok'; st.textContent = '> TRANSMISSION SENT: تم إرسال الإشارة بنجاح.'; e.target.reset(); tap(1400, 'square');
+  }catch(_){ st.textContent = '> ERROR: فشل الإرسال، حاول مرة أخرى.'; beep(300, 'sawtooth', .15); }
+});
+
+/* ---------- Clock ---------- */
+const clock = document.getElementById('live-time');
+const tick = () => clock.textContent = new Date().toISOString().slice(11, 19) + ' UTC';
+tick(); setInterval(tick, 1000);
+
+/* ---------- Canvas: drifting grid + pointer glow ---------- */
+const cv = document.getElementById('cyber-canvas'), ctx = cv.getContext('2d');
+let W, H, off = 0, px = -999, py = -999, running = !REDUCED;
+function resize(){
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  W = innerWidth; H = innerHeight;
+  cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if(!running) draw();
+}
+const parts = Array.from({length: 28}, () => ({x: Math.random(), y: Math.random(), v: .0002 + Math.random() * .0005, c: Math.random() > .6 ? '#ff0055' : '#00f3ff'}));
+function draw(){
+  ctx.clearRect(0, 0, W, H);
+  const g = 40; off = (off + .25) % g;
+  ctx.strokeStyle = 'rgba(0,243,255,.06)'; ctx.lineWidth = 1; ctx.beginPath();
+  for(let x = 0; x < W; x += g){ ctx.moveTo(x, 0); ctx.lineTo(x, H); }
+  for(let y = off; y < H; y += g){ ctx.moveTo(0, y); ctx.lineTo(W, y); }
+  ctx.stroke();
+  parts.forEach(p => {
+    p.y -= p.v; if(p.y < 0){ p.y = 1; p.x = Math.random(); }
+    ctx.globalAlpha = .5; ctx.fillStyle = p.c; ctx.fillRect(p.x * W, p.y * H, 2, 2);
+  });
+  ctx.globalAlpha = 1;
+  if(px > 0){
+    const r = ctx.createRadialGradient(px, py, 0, px, py, 160);
+    r.addColorStop(0, 'rgba(0,243,255,.14)'); r.addColorStop(1, 'rgba(0,243,255,0)');
+    ctx.fillStyle = r; ctx.fillRect(px - 160, py - 160, 320, 320);
+  }
+}
+function loop(){ if(running){ draw(); requestAnimationFrame(loop); } }
+addEventListener('resize', resize);
+addEventListener('pointermove', e => { px = e.clientX; py = e.clientY; if(!running) draw(); }, {passive: true});
+document.addEventListener('visibilitychange', () => { running = !document.hidden && !REDUCED; if(running) loop(); });
+resize(); loop();
+
+/* ---------- Deep link ---------- */
+const hash = location.hash.slice(1);
+if(['profile', 'skills', 'quests', 'contact'].includes(hash)) switchTab(hash);
+</script>
+</body>
+</html>
